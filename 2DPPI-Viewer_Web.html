@@ -1,0 +1,870 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="2dppiviewer-origin" content="web-app"/>
+<title>2DPPI-Viewer Web</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: #f5f6f8;
+    color: #222;
+  }
+  #app {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  #bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    border-bottom: 1px solid #d9dde3;
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(6px);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  #title {
+    font-weight: 900;
+    letter-spacing: .2px;
+    margin-right: 8px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid #d2d6dc;
+    border-radius: 10px;
+    background: #fff;
+    cursor: pointer;
+    user-select: none;
+    font-size: 14px;
+  }
+  .btn:hover {
+    background: #f7f8fa;
+  }
+  #status {
+    font-size: 13px;
+    color: #4b5563;
+    min-height: 18px;
+  }
+  #frameWrap {
+    flex: 1;
+    min-height: 0;
+    background: #e9edf2;
+  }
+  #iframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #fff;
+  }
+  #dropHint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    min-height: 0;
+    padding: 24px;
+  }
+  #dropCard {
+    max-width: 640px;
+    width: min(92vw, 640px);
+    border: 2px dashed #c9d0d9;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.92);
+    padding: 28px 24px;
+    text-align: center;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.06);
+  }
+  #dropCard h1 {
+    margin: 0 0 10px;
+    font-size: 22px;
+  }
+  #dropCard p {
+    margin: 0;
+    line-height: 1.5;
+    color: #4b5563;
+  }
+  #dropCard .row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 18px;
+  }
+  .hidden {
+    display: none !important;
+  }
+  @media (max-width: 640px) {
+    #bar {
+      padding: 8px;
+      gap: 8px;
+    }
+    .btn {
+      min-height: 34px;
+      font-size: 13px;
+      padding: 0 10px;
+    }
+    #title {
+      width: 100%;
+    }
+    #dropCard h1 {
+      font-size: 20px;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="bar">
+    <div id="title">2DPPI-Viewer Web</div>
+    <input id="fileOpen" type="file" accept=".drw,.html,text/html" class="hidden">
+    <div class="btn" id="btnOpen">Open .drw or .html</div>
+    <div class="btn" id="btnSave">Save HTML</div>
+    <div id="status">Ready</div>
+  </div>
+  <div id="dropHint">
+    <div id="dropCard">
+      <h1>Open a .drw file</h1>
+      <p>Upload a LigPlot+ .drw file to generate the viewer in the browser, or open a saved .html viewer file again later.</p>
+      <div class="row">
+        <div class="btn" id="btnOpen2">Open .drw or .html</div>
+      </div>
+    </div>
+  </div>
+  <div id="frameWrap" class="hidden">
+    <iframe id="iframe" title="2DPPI-Viewer"></iframe>
+  </div>
+</div>
+
+<script>
+const VIEWER_TEMPLATE = "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\"/>\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>\n<title>2DPPI-Viewer</title>\n<style>\n  html, body {\n    margin:0; height:100%; overflow:hidden;\n    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;\n  }\n\n  #topbar {\n    position: fixed; left: 10px; top: 10px; z-index: 10;\n    display:flex; gap:10px; align-items:center; flex-wrap:wrap;\n    max-width: calc(100% - 20px);\n  }\n\n  .btn {\n    border:1px solid #c7c7c7; background:#fff; padding:8px 12px; border-radius:10px;\n    font-weight:800; cursor:pointer; user-select:none;\n    box-shadow: 0 1px 6px rgba(0,0,0,0.08);\n  }\n  .btn.on { background:#e8f0fe; border-color:#7aa5ff; }\n\n  #hint {\n    margin-left: 10px; color:#444; font-size: 13px;\n    max-width: 980px;\n    line-height: 1.25;\n  }\n\n  #legendbar {\n    position: fixed;\n    left: 10px;\n    right: 10px;\n    bottom: 10px;\n    z-index: 10;\n    display:flex;\n    gap: 12px;\n    align-items:center;\n    justify-content: center;\n    flex-wrap: wrap;\n    background: rgba(255,255,255,0.92);\n    border: 1px solid #d6d6d6;\n    border-radius: 12px;\n    padding: 8px 10px;\n    box-shadow: 0 1px 6px rgba(0,0,0,0.08);\n    font-size: 12.5px;\n    color: #222;\n  }\n  .legendGroup { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }\n  .legendSpacer { width: 18px; height: 18px; border-left: 1px solid rgba(0,0,0,0.18); margin: 0 6px; }\n\n  /* Residue legend pills */\n  .lgPill {\n    display:inline-flex; align-items:center; justify-content:center;\n    padding: 6px 10px;\n    border-radius: 999px;\n    border: 2px solid rgba(0,0,0,0.25);\n    font-weight: 800;\n    letter-spacing: 0.1px;\n    user-select:none;\n  }\n\n  /* Atom legend (dots) */\n  .lgAtomItem { display:inline-flex; align-items:center; gap:8px; font-weight:800; }\n  .lgDot {\n    width: 12px; height: 12px; border-radius: 999px;\n    border: 1px solid rgba(0,0,0,0.28);\n    display:inline-block;\n  }\n  .lgAtomText { color: #222; }\n\n  svg { width:100%; height:100%; background:#ffffff; overflow: visible; }\n\n  .edgeLabel, .nodeLabel, .resLabel, .atomLabel {\n    pointer-events:none;\n    stroke: none;\n  }\n\n  .res { cursor: grab; }\n  .res:active { cursor: grabbing; }\n\n  /* Mobile + touch improvements */\n  #svg { touch-action: none; }\n  #themePanel input, #themePanel textarea, #themePanel select { font-size:16px; }\n  #themePanel { -webkit-overflow-scrolling: touch; }\n\n  @media (max-width: 520px) {\n    #topbar { left: 6px; top: 6px; gap:6px; }\n    .btn { padding:6px 9px; border-radius:10px; font-size:12px; }\n    #themePanel { width: min(92vw, 340px); max-height: calc(100vh - 320px) !important; }\n    /* Make SVG labels smaller on phones */\n    text.resLabel { font-size: 10px; }\n    text.atomLabel { font-size: 9px; }\n    text.chainLabel { font-size: 12px; }\n    #legendbar { font-size: 12px; }\n  }\n\n\n  /* Theme panel sizing + stacking */\n  #themePanel { overflow:auto; max-height: calc(100vh - 140px); z-index: 30; padding-bottom: 12px; box-sizing:border-box; }\n\n  /* Landscape phone: reduce UI footprint */\n  @media (orientation: landscape) and (max-height: 520px) {\n    #hint { display:none; }\n    #topbar { gap:6px; }\n    .btn { padding:6px 9px; border-radius:10px; font-size:12px; }\n    #legendbar { padding: 4px 6px; gap: 8px; font-size: 11.5px; max-height: 72px; overflow:auto; }\n    .lgPill { padding: 4px 8px; }\n    .lgDot { width: 10px; height: 10px; }\n    #themePanel { width: min(70vw, 380px); max-height: calc(100vh - 90px); }\n    text.resLabel { font-size: 9px; }\n    text.atomLabel { font-size: 8px; }\n    text.chainLabel { font-size: 11px; }\n  }\n\n</style>\n</head>\n<body>\n\n<div id=\"topbar\">\n  <div class=\"btn on\" id=\"btnDrag\">Drag nodes: ON</div>\n  <div class=\"btn on\" id=\"btnLock\">Chain-side lock: ON</div>\n  <div class=\"btn on\" id=\"btnPan\">Pan &amp; Zoom: ON</div>\n  <div class=\"btn on\" id=\"btnContacts\">Contacts: ON</div>\n  <div class=\"btn\" id=\"btnHBOnly\">H-bond residues only: OFF</div>\n  <div class=\"btn\" id=\"btnAA\">AA labels: 3-letter</div>\n  \n  <div class=\"btn\" id=\"btnFit\">Fit to view</div>\n  <div class=\"btn\" id=\"btnReset\">Reset</div>\n  <div class=\"btn\" id=\"btnExport\">Export SVG</div>\n  <div id=\"themeWrap\" style=\"position:relative; display:inline-block;\">\n  <div class=\"btn\" id=\"btnTheme\">Theme</div>\n  <div id=\"themePanel\" style=\"display:none; position:absolute; top: calc(100% + 8px); right:0; padding:10px 12px; background:rgba(255,255,255,0.96); border:1px solid #d6d6d6; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.16); z-index:9999; width: 320px; max-height: calc(100vh - 140px); overflow:auto;\">\n\n    <div style=\"font-weight:900; margin-bottom:6px;\">Colors</div>\n    <div style=\"display:grid; grid-template-columns: 110px 90px 90px; gap:6px 10px; align-items:center; font-size:12px;\">\n      <div></div><div style=\"font-weight:800;\">Fill</div><div style=\"font-weight:800;\">Stroke</div>\n      <div>Positive</div><input type=\"color\" id=\"cPosFill\"><input type=\"color\" id=\"cPosStroke\">\n      <div>Negative</div><input type=\"color\" id=\"cNegFill\"><input type=\"color\" id=\"cNegStroke\">\n      <div>Polar</div><input type=\"color\" id=\"cPolFill\"><input type=\"color\" id=\"cPolStroke\">\n      <div>Special</div><input type=\"color\" id=\"cSpeFill\"><input type=\"color\" id=\"cSpeStroke\">\n      <div>Hydrophobic</div><input type=\"color\" id=\"cHydFill\"><input type=\"color\" id=\"cHydStroke\">\n      <div style=\"grid-column:1 / span 3; height:1px; background:rgba(0,0,0,0.15); margin:4px 0;\"></div>\n      <div>+charge atom</div><input type=\"color\" id=\"cPosAtom\"><div></div>\n      <div>-charge atom</div><input type=\"color\" id=\"cNegAtom\"><div></div>\n      <div>Disulfide atom</div><input type=\"color\" id=\"cDisAtom\"><div></div>\n    </div>\n\n    <div style=\"height:10px;\"></div>\n    <div style=\"font-weight:900; margin:4px 0 6px;\">Chain labels</div>\n    <div style=\"display:grid; grid-template-columns: 90px 1fr; gap:6px 10px; align-items:center; font-size:12px;\">\n      <div>Chain A</div><input type=\"text\" id=\"chainAName\" placeholder=\"Chain A\" style=\"width:100%; padding:6px 8px; border:1px solid #d6d6d6; border-radius:8px; font-size:12px;\">\n      <div>Chain B</div><input type=\"text\" id=\"chainBName\" placeholder=\"Chain B\" style=\"width:100%; padding:6px 8px; border:1px solid #d6d6d6; border-radius:8px; font-size:12px;\">\n    </div>\n\n    <hr style=\"border:none; border-top:1px solid #e5e5e5; margin:12px 0 10px;\">\n    <div style=\"font-weight:900; margin-bottom:6px;\">Session</div>\n    <div style=\"display:flex; gap:8px; flex-wrap:wrap;\">\n      <div class=\"btn\" id=\"btnSessionExport\" style=\"padding:6px 10px;\">Export JSON</div>\n      <div class=\"btn\" id=\"btnSessionImport\" style=\"padding:6px 10px;\">Import JSON</div>\n    </div>\n    <div style=\"font-size:12px; opacity:0.75; margin-top:6px; line-height:1.25;\">\n      Exports/imports: colors, chain names, AA label mode, view (zoom/pan), residue positions/rotations.\n    </div>\n\n    <div style=\"display:flex; gap:8px; margin-top:8px; justify-content:flex-end;\">\n      <div class=\"btn\" id=\"btnChainReset\" style=\"padding:6px 10px;\">Reset chains</div>\n    </div>\n    <div style=\"display:flex; gap:8px; margin-top:8px; justify-content:flex-end;\">\n      <div class=\"btn\" id=\"btnThemeReset\" style=\"padding:6px 10px;\">Reset colors</div>\n      <div class=\"btn on\" id=\"btnThemeClose\" style=\"padding:6px 10px;\">Close</div>\n    </div>\n  </div>\n</div>\n\n  <div id=\"hint\">Drag residues \u2022 Wheel zoom \u2022 Pan: Shift-drag or middle mouse on background \u2022 Alt + drag (focus residue) rotates its atom diagram \u2022 Green dashed = H-bond (distance) \u2022 Yellow dashed = disulfide \u2022 Gray = contact</div>\n</div>\n\n\n<div id=\"sessionModal\" style=\"display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.45);\">\n  <div style=\"position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(92vw, 720px); background:rgba(255,255,255,0.98); border:1px solid #d6d6d6; border-radius:14px; box-shadow:0 10px 28px rgba(0,0,0,0.25); padding:12px;\">\n    <div style=\"display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;\">\n      <div style=\"font-weight:900;\">Session JSON</div>\n      <div class=\"btn\" id=\"btnSessionClose\" style=\"padding:6px 10px;\">Close</div>\n    </div>\n    <textarea id=\"sessionTextarea\" spellcheck=\"false\" style=\"width:100%; height: min(55vh, 420px); resize:vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size:12px; padding:10px; border:1px solid #ddd; border-radius:10px;\"></textarea>\n    <div style=\"display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; margin-top:8px;\">\n      <input id=\"sessionFile\" type=\"file\" accept=\"application/json\" style=\"display:none;\">\n      <div class=\"btn\" id=\"btnSessionCopy\" style=\"padding:6px 10px;\">Copy</div>\n      <div class=\"btn\" id=\"btnSessionDownload\" style=\"padding:6px 10px;\">Download</div>\n      <div class=\"btn on\" id=\"btnSessionApply\" style=\"padding:6px 10px;\">Apply</div>\n    </div>\n    <div style=\"font-size:12px; opacity:0.75; margin-top:6px; line-height:1.25;\">\n      Tip: On mobile, use Copy and paste into Notes/email to move to PC, or Download if supported.\n    </div>\n  </div>\n</div>\n\n\n<div id=\"legendbar\">\n  <div class=\"legendGroup legendResidues\"><span class=\"lgPill\" data-cls=\"positive\" style=\"background:rgba(255,109,96,0.22); border-color:#b23b32; color:#b23b32;\">Positive</span><span class=\"lgPill\" data-cls=\"negative\" style=\"background:rgba(106,169,255,0.22); border-color:#2e5aa8; color:#2e5aa8;\">Negative</span><span class=\"lgPill\" data-cls=\"polar\" style=\"background:rgba(255,213,79,0.22); border-color:#c49000; color:#c49000;\">Polar</span><span class=\"lgPill\" data-cls=\"special\" style=\"background:rgba(153,246,228,0.22); border-color:#0F766E; color:#0F766E;\">Special</span><span class=\"lgPill\" data-cls=\"hydrophobic\" style=\"background:rgba(208,208,208,0.22); border-color:#7a7a7a; color:#7a7a7a;\">Hydrophobic</span></div><div class=\"legendSpacer\"></div><div class=\"legendGroup legendAtoms\"><span class=\"lgAtomItem\"><span class=\"lgDot\" data-atomkey=\"posAtom\" style=\"background:#FF6D00;\"></span><span class=\"lgAtomText\">+charge atoms</span></span><span class=\"lgAtomItem\"><span class=\"lgDot\" data-atomkey=\"negAtom\" style=\"background:#6A1B9A;\"></span><span class=\"lgAtomText\">-charge atoms</span></span><span class=\"lgAtomItem\"><span class=\"lgDot\" data-atomkey=\"disAtom\" style=\"background:#FFD54F;\"></span><span class=\"lgAtomText\">disulfide</span></span></div>\n</div>\n\n<svg id=\"svg\" viewBox=\"0 0 1600 900\">\n  <g id=\"viewport\">\n__SVG_CONTENT__\n</g>\n</svg>\n\n<script>\nconst W = 1600, H = 900;\nconst BOUNDARY_Y = __BOUNDARY_Y__;\n\nconst RES = __RES_JSON__;\n// per-focus atom block offset (to pull toward boundary when label would overlap another residue)\nfor (const [rid, r] of Object.entries(RES)) {\n  if (r.aox === undefined) r.aox = 0;\n  if (r.aoy === undefined) r.aoy = 0;\n  r._aox0 = r.aox;\n  r._aoy0 = r.aoy;\n}\nconst LABEL_TOP_GAP = 10;   // gap between atom diagram and residue label (larger => label higher)\nconst PULL_STEP = 4;        // px per iteration when pulling toward boundary\nconst PULL_MAX_ITERS = 30;  // safety\n\nconst EDGES = __EDGES_JSON__;\n\nconst SIMPLE_R = 20.000;\nconst FOCUS_R  = 44.000;\n\nconst RELAX_ITERS = 320;\nconst RELAX_GAP   = 14.0;\nconst RELAX_STEP  = 0.38;\n\nconst RELAX_ON_POINTERUP = false;\n\nlet dragEnabled = true;\nlet chainSideLock = true;\nlet panZoomEnabled = true;\nlet contactsVisible = true;\n\n// New: hide residues that are not in H-bond network\nlet hbOnly = false;\n\nconst btnDrag = document.getElementById('btnDrag');\nconst btnLock = document.getElementById('btnLock');\nconst btnPan  = document.getElementById('btnPan');\nconst btnContacts = document.getElementById('btnContacts');\nconst btnHBOnly = document.getElementById('btnHBOnly');\nconst btnFit  = document.getElementById('btnFit');\nconst btnReset= document.getElementById('btnReset');\nconst btnExport= document.getElementById('btnExport');\n\nconst svg = document.getElementById('svg');\nconst viewport = document.getElementById('viewport');\n\nfunction slug(s) { return s.replace(/[^A-Za-z0-9_]+/g, '_'); }\n\nfor (const [rid, r] of Object.entries(RES)) {\n  r._x0 = r.x; r._y0 = r.y;\n  r.rot = 0;\n  r._rot0 = 0;\n}\n\n// Build set of residues participating in ANY H-bond\nconst HB_RES = new Set();\nfor (const e of EDGES) {\n  if (e.type === 'hbond') {\n    HB_RES.add(e.ra);\n    HB_RES.add(e.rb);\n  }\n}\n\nbtnDrag.addEventListener('click', () => {\n  dragEnabled = !dragEnabled;\n  btnDrag.classList.toggle('on', dragEnabled);\n  btnDrag.textContent = dragEnabled ? \"Drag nodes: ON\" : \"Drag nodes: OFF\";\n});\n\nbtnLock.addEventListener('click', () => {\n  chainSideLock = !chainSideLock;\n  btnLock.classList.toggle('on', chainSideLock);\n  btnLock.textContent = chainSideLock ? \"Chain-side lock: ON\" : \"Chain-side lock: OFF\";\n  resolveOverlaps();\n  updateAllEdges();\n  autoPlaceFocusTopLabelsAndPull();\n});\n\nbtnPan.addEventListener('click', () => {\n  panZoomEnabled = !panZoomEnabled;\n  btnPan.classList.toggle('on', panZoomEnabled);\n  btnPan.textContent = panZoomEnabled ? \"Pan & Zoom: ON\" : \"Pan & Zoom: OFF\";\n});\n\nfunction applyContactsVisibility() {\n  const els = document.querySelectorAll('line.edge.contact');\n  els.forEach(el => {\n    el.style.display = contactsVisible ? '' : 'none';\n  });\n}\n\nfunction applyResidueFilter() {\n  // hbOnly: show only residues that are in the H-bond network\n  for (const rid of Object.keys(RES)) {\n    const g = document.getElementById('res_' + slug(rid));\n    if (!g) continue;\n    if (!hbOnly) {\n      g.style.display = '';\n    } else {\n      g.style.display = HB_RES.has(rid) ? '' : 'none';\n    }\n  }\n  applyContactsVisibility();\n\n  // Also hide H-bond / disulphide lines if either endpoint residue is hidden (safety)\n  for (const e of EDGES) {\n    if (e.type !== 'hbond' && e.type !== 'disulphide') continue;\n    const prefix = (e.type === 'hbond') ? 'h_' : 'd_';\n    const lid = prefix + slug(e.ra) + '_' + e.a + '__' + slug(e.rb) + '_' + e.b;\n    const line = document.getElementById(lid);\n    const text = document.getElementById(lid + '_t');\n\n    const show = (!hbOnly) || (HB_RES.has(e.ra) && HB_RES.has(e.rb));\n    if (line) line.style.display = show ? '' : 'none';\n    if (text) text.style.display = show ? '' : 'none';\n  }\n\n  updateAllEdges();\n}\n\nbtnContacts.addEventListener('click', () => {\n  const turningOn = !contactsVisible;\n  contactsVisible = !contactsVisible;\n  btnContacts.classList.toggle('on', contactsVisible);\n  btnContacts.textContent = contactsVisible ? \"Contacts: ON\" : \"Contacts: OFF\";\n\n  // If user turns ON contacts while in HB-only mode, automatically show all residues\n  // (prevents \"lines-only\" awkwardness).\n  if (turningOn && hbOnly) {\n    hbOnly = false;\n    btnHBOnly.classList.toggle('on', hbOnly);\n    btnHBOnly.textContent = hbOnly ? \"H-bond residues only: ON\" : \"H-bond residues only: OFF\";\n    applyResidueFilter();\n  }\n\n  applyContactsVisibility();\n  updateAllEdges();\n});\n\nbtnHBOnly.addEventListener('click', () => {\n  hbOnly = !hbOnly;\n  btnHBOnly.classList.toggle('on', hbOnly);\n  btnHBOnly.textContent = hbOnly ? \"H-bond residues only: ON\" : \"H-bond residues only: OFF\";\n  applyResidueFilter();\n});\n\nbtnFit.addEventListener('click', () => {\n  fitViewToResidues();\n});\n\nfunction setAtomBlockRotation(rid) {\n  const r = RES[rid];\n  if (!r || !r.focus) return;\n  const ab = document.getElementById('atomblock_' + slug(rid));\n  if (!ab) return;\n  const deg = (r.rot || 0);\n  ab.setAttribute('transform', `rotate(${deg})`);\n}\n\n\nfunction _rectOverlap(a, b, pad=0) {\n  return !((a.right + pad) < b.left || (b.right + pad) < a.left || (a.bottom + pad) < b.top || (b.bottom + pad) < a.top);\n}\n\n// Place focus residue label above its atom diagram; if it overlaps another residue node circle,\n// pull the atom diagram + label toward the boundary line (keeps initial orientation stable).\nfunction autoPlaceFocusTopLabelsAndPull() {\n  // Build list of other residue circles (simple nodes + focus centers)\n  const circles = [];\n  for (const [rid2, r2] of Object.entries(RES)) {\n    const g2 = document.getElementById('res_' + slug(rid2));\n    if (!g2 || g2.style.display === 'none') continue;\n    if (hbOnly && !HB_RES.has(rid2)) continue;\n\n    let c = null;\n    if (r2.focus) c = g2.querySelector('circle.center');\n    else c = g2.querySelector('circle.node');\n    if (!c) continue;\n    circles.push({rid: rid2, el: c});\n  }\n\n  for (const [rid, r] of Object.entries(RES)) {\n    if (!r || !r.focus) continue;\n\n    const g = document.getElementById('res_' + slug(rid));\n    if (!g || g.style.display === 'none') continue;\n    if (hbOnly && !HB_RES.has(rid)) continue;\n\n    const label = g.querySelector('text.resLabel');\n    const ab = document.getElementById('atomblock_' + slug(rid));\n    if (!label || !ab) continue;\n\n    // compute desired label position in local coords (accounting for aox/aoy since bbox ignores transforms)\n    let bb;\n    try { bb = ab.getBBox(); } catch(e) { continue; }\n\n    const lx = (bb.x + bb.width/2) + (r.aox||0);\n    const ly = (bb.y) + (r.aoy||0) - LABEL_TOP_GAP;\n\n    label.setAttribute('text-anchor', 'middle');\n    label.setAttribute('dominant-baseline', 'alphabetic');\n    label.setAttribute('x', lx);\n    label.setAttribute('y', ly);\n\n    // If the label overlaps another residue circle, pull toward boundary by shifting aoy.\n    let it = 0;\n    while (it < PULL_MAX_ITERS) {\n      const lr = label.getBoundingClientRect();\n      let hit = false;\n\n      for (const c of circles) {\n        if (c.rid === rid) continue;\n        const cr = c.el.getBoundingClientRect();\n        if (_rectOverlap(lr, cr, 2)) { hit = true; break; }\n      }\n\n      if (!hit) break;\n\n      const dir = (r.chain === 'A') ? +1 : (r.chain === 'B' ? -1 : 0);\n      if (dir === 0) break;\n\n      r.aoy = (r.aoy||0) + dir * PULL_STEP;\n\n      // apply updated transform and recompute label position\n      setAtomBlockRotation(rid);\n      const ly2 = (bb.y) + (r.aoy||0) - LABEL_TOP_GAP;\n      label.setAttribute('y', ly2);\n\n      it++;\n    }\n  }\n}\n\n\nbtnReset.addEventListener('click', () => {\n  for (const [rid, r] of Object.entries(RES)) {\n    r.x = r._x0; r.y = r._y0;\n    r.rot = r._rot0 || 0;\n    r.aox = r._aox0 || 0;\n    r.aoy = r._aoy0 || 0;\n    const g = document.getElementById('res_' + slug(rid));\n    if (g) g.setAttribute('transform', `translate(${r.x},${r.y})`);\n    setAtomBlockRotation(rid);\n  }\n\n  view = {x:0, y:0, k:1};\n  applyView();\n\n  // restore toggles\n  dragEnabled = true;\n  chainSideLock = true;\n  panZoomEnabled = true;\n  contactsVisible = true;\n  hbOnly = false;\n\n  btnDrag.classList.toggle('on', true);\n  btnDrag.textContent = \"Drag nodes: ON\";\n\n  btnLock.classList.toggle('on', true);\n  btnLock.textContent = \"Chain-side lock: ON\";\n\n  btnPan.classList.toggle('on', true);\n  btnPan.textContent = \"Pan & Zoom: ON\";\n\n  btnContacts.classList.toggle('on', true);\n  btnContacts.textContent = \"Contacts: ON\";\n\n  btnHBOnly.classList.toggle('on', false);\n  btnHBOnly.textContent = \"H-bond residues only: OFF\";\n\n  resolveOverlaps();\n  updateAllEdges();\n  autoPlaceFocusTopLabelsAndPull();\n  fitViewToResidues();\n  applyContactsVisibility();\n  applyResidueFilter();\n});\n\nfunction exportCurrentSVG() {\n  const src = document.getElementById('svg');\n  const clone = src.cloneNode(true);\n\n  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');\n\n  const PAD = 240;\n  clone.setAttribute('viewBox', (-PAD) + ' ' + (-PAD) + ' ' + (W + 2*PAD) + ' ' + (H + 2*PAD));\n  clone.setAttribute('width', String(W + 2*PAD));\n  clone.setAttribute('height', String(H + 2*PAD));\n\n  const serializer = new XMLSerializer();\n  let svgText = serializer.serializeToString(clone);\n  if (!svgText.startsWith('<?xml')) {\n    svgText = '<?xml version=\"1.0\" encoding=\"UTF-8\"?>\\n' + svgText;\n  }\n\n  const blob = new Blob([svgText], {type: 'image/svg+xml;charset=utf-8'});\n  const url = URL.createObjectURL(blob);\n\n  const a = document.createElement('a');\n  a.href = url;\n  a.download = '2DPPIViewer.svg';\n  document.body.appendChild(a);\n  a.click();\n  a.remove();\n\n  setTimeout(() => URL.revokeObjectURL(url), 500);\n}\n\nbtnExport.addEventListener('click', () => {\n  exportCurrentSVG();\n});\n\nfunction setLine(id, x1,y1,x2,y2) {\n  const el = document.getElementById(id);\n  if (!el) return;\n  el.setAttribute('x1', x1); el.setAttribute('y1', y1);\n  el.setAttribute('x2', x2); el.setAttribute('y2', y2);\n}\nfunction setText(id, x,y, txt) {\n  const el = document.getElementById(id);\n  if (!el) return;\n  el.setAttribute('x', x); el.setAttribute('y', y);\n  el.textContent = txt;\n}\n\nfunction clampY(chain, y) {\n  if (!chainSideLock) return y;\n  const gap = 26;\n  if (chain === 'A') return Math.min(y, BOUNDARY_Y - gap);\n  if (chain === 'B') return Math.max(y, BOUNDARY_Y + gap);\n  return y;\n}\n\nfunction getAtomAbs(resId, atomIdxStr) {\n  const r = RES[resId];\n  if (!r) return null;\n\n  if (r.atoms && r.atoms[atomIdxStr]) {\n    const a = r.atoms[atomIdxStr];\n    const ax = a.dx, ay = a.dy;\n\n    const rad = (r.rot || 0) * Math.PI / 180.0;\n    const c = Math.cos(rad), s = Math.sin(rad);\n    const rx = ax * c - ay * s;\n    const ry = ax * s + ay * c;\n\n    return { x: r.x + rx, y: r.y + ry };\n  }\n\n  return { x: r.x, y: r.y };\n}\n\nfunction updateAllEdges() {\n  // contacts\n  for (const e of EDGES) {\n    if (e.type === 'contact') {\n      const u = RES[e.u], v = RES[e.v];\n      if (!u || !v) continue;\n\n      const lid = 'c_' + slug(e.u) + '__' + slug(e.v);\n      const line = document.getElementById(lid);\n      if (!line) continue;\n\n      // In hbOnly mode, show contacts only between visible (HB) residues.\n      const show = contactsVisible && (!hbOnly || (HB_RES.has(e.u) && HB_RES.has(e.v)));\n      line.style.display = show ? '' : 'none';\n\n      setLine(lid, u.x, u.y, v.x, v.y);\n\n\n    }\n  }\n\n  // hbonds / disulphides\n  for (const e of EDGES) {\n    if (e.type === 'hbond' || e.type === 'disulphide') {\n      if (hbOnly && (!HB_RES.has(e.ra) || !HB_RES.has(e.rb))) continue;\n\n      const p1 = getAtomAbs(e.ra, e.a);\n      const p2 = getAtomAbs(e.rb, e.b);\n      if (!p1 || !p2) continue;\n\n      const prefix = (e.type === 'hbond') ? 'h_' : 'd_';\n      const lid = prefix + slug(e.ra) + '_' + e.a + '__' + slug(e.rb) + '_' + e.b;\n      setLine(lid, p1.x, p1.y, p2.x, p2.y);\n\n      if (e.type === 'hbond') {\n        const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;\n        const dx = p2.x - p1.x, dy = p2.y - p1.y;\n        const L = Math.hypot(dx, dy) || 1;\n        const nx = -dy / L, ny = dx / L;\n        const off = 12;\n        const tx = mx + nx * off, ty = my + ny * off;\n\n        const distTxt = (e.dist !== null && e.dist !== undefined)\n          ? (Number(e.dist).toFixed(2) + ' \u00c5') : '';\n        setText(lid + '_t', tx, ty, distTxt);\n      }\n    }\n  }\n}\n\nfunction nodeRadius(r) {\n  return r.focus ? FOCUS_R : SIMPLE_R;\n}\n\nfunction resolveOverlaps() {\n  const ids = Object.keys(RES);\n  for (let it = 0; it < RELAX_ITERS; it++) {\n    let moved = 0;\n    for (let i = 0; i < ids.length; i++) {\n      const A = RES[ids[i]];\n      if (!A) continue;\n\n      for (let j = i + 1; j < ids.length; j++) {\n        const B = RES[ids[j]];\n        if (!B) continue;\n\n        if (A.chain !== B.chain) continue;\n\n        // if hbOnly: only relax among visible residues\n        if (hbOnly && (!HB_RES.has(ids[i]) || !HB_RES.has(ids[j]))) continue;\n\n        const minD = nodeRadius(A) + nodeRadius(B) + RELAX_GAP;\n        let dx = B.x - A.x;\n        let dy = B.y - A.y;\n        let d = Math.hypot(dx, dy);\n\n        if (d < 1e-6) { dx = 1; dy = 0; d = 1; }\n\n        if (d < minD) {\n          const push = (minD - d) * 0.5 * RELAX_STEP;\n          const ux = dx / d;\n          const uy = dy / d;\n\n          A.x -= ux * push; A.y -= uy * push;\n          B.x += ux * push; B.y += uy * push;\n\n          A.y = clampY(A.chain, A.y);\n          B.y = clampY(B.chain, B.y);\n          moved++;\n        }\n      }\n    }\n    if (moved === 0) break;\n  }\n\n  for (const [rid, r] of Object.entries(RES)) {\n    const g = document.getElementById('res_' + slug(rid));\n    if (!g) continue;\n    g.setAttribute('transform', `translate(${r.x},${r.y})`);\n  }\n}\n\nlet view = {x:0, y:0, k:1};\nfunction applyView() {\n  viewport.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`);\n}\n\nfunction svgPoint(evt) {\n  const pt = svg.createSVGPoint();\n  pt.x = evt.clientX; pt.y = evt.clientY;\n  const ctm = svg.getScreenCTM();\n  if (!ctm) return {x:0,y:0};\n  return pt.matrixTransform(ctm.inverse());\n}\n\nfunction getBBoxVisible() {\n  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;\n  for (const [rid, r] of Object.entries(RES)) {\n    if (hbOnly && !HB_RES.has(rid)) continue;\n    const rad = nodeRadius(r) + 12;\n    minx = Math.min(minx, r.x - rad);\n    miny = Math.min(miny, r.y - rad);\n    maxx = Math.max(maxx, r.x + rad);\n    maxy = Math.max(maxy, r.y + rad);\n  }\n  if (!isFinite(minx)) return {minx:0,miny:0,maxx:W,maxy:H};\n  return {minx, miny, maxx, maxy};\n}\n\nfunction fitViewToResidues() {\n  const bb = getBBoxVisible();\n  const pad = 40;\n  const bw = (bb.maxx - bb.minx) + 2*pad;\n  const bh = (bb.maxy - bb.miny) + 2*pad;\n\n  const k = Math.min(W / bw, H / bh);\n  view.k = Math.max(0.2, Math.min(8.0, k));\n\n  const cx = (bb.minx + bb.maxx) / 2;\n  const cy = (bb.miny + bb.maxy) / 2;\n  view.x = W/2 - cx * view.k;\n  view.y = H/2 - cy * view.k;\n  applyView();\n}\n\nlet draggingNode = null;\nlet draggingPan = null;\nlet rotating = null;\n\nsvg.addEventListener('pointerdown', (evt) => {\n  const p = svgPoint(evt);\n  const g = evt.target.closest('g.res');\n\n  const isMiddle = (evt.button === 1);\n  const isShift = evt.shiftKey;\n\n  if (panZoomEnabled && (isMiddle || isShift) && !g) {\n    draggingPan = {x0: p.x, y0: p.y, vx0: view.x, vy0: view.y};\n    svg.setPointerCapture(evt.pointerId);\n    return;\n  }\n\n  if (!dragEnabled) return;\n  if (!g) return;\n\n  const rid = g.getAttribute('data-res');\n  if (!rid || !RES[rid]) return;\n\n  // if filtered out, do nothing\n  if (hbOnly && !HB_RES.has(rid)) return;\n\n  if (RES[rid].focus && evt.altKey) {\n    const sx = (p.x - view.x) / view.k;\n    const sy = (p.y - view.y) / view.k;\n\n    const r = RES[rid];\n    const vx = sx - r.x;\n    const vy = sy - r.y;\n    const ang0 = Math.atan2(vy, vx);\n\n    rotating = { rid, ang0, rot0: (r.rot || 0) };\n    g.setPointerCapture(evt.pointerId);\n    return;\n  }\n\n  const sx = (p.x - view.x) / view.k;\n  const sy = (p.y - view.y) / view.k;\n  draggingNode = { rid, dx: sx - RES[rid].x, dy: sy - RES[rid].y };\n  g.setPointerCapture(evt.pointerId);\n});\n\nsvg.addEventListener('pointermove', (evt) => {\n  const p = svgPoint(evt);\n\n  if (draggingPan) {\n    const dx = (p.x - draggingPan.x0);\n    const dy = (p.y - draggingPan.y0);\n    view.x = draggingPan.vx0 + dx;\n    view.y = draggingPan.vy0 + dy;\n    applyView();\n    return;\n  }\n\n  if (rotating) {\n    const rid = rotating.rid;\n    const r = RES[rid];\n    if (!r) return;\n\n    const sx = (p.x - view.x) / view.k;\n    const sy = (p.y - view.y) / view.k;\n\n    const vx = sx - r.x;\n    const vy = sy - r.y;\n    const ang = Math.atan2(vy, vx);\n\n    const dAng = ang - rotating.ang0;\n    r.rot = rotating.rot0 + dAng * 180.0 / Math.PI;\n\n    setAtomBlockRotation(rid);\n    updateAllEdges();\n    return;\n  }\n\n  if (!draggingNode) return;\n  const r = RES[draggingNode.rid];\n  if (!r) return;\n\n  const sx = (p.x - view.x) / view.k;\n  const sy = (p.y - view.y) / view.k;\n\n  const nx = sx - draggingNode.dx;\n  let ny = sy - draggingNode.dy;\n  ny = clampY(r.chain, ny);\n\n  r.x = nx; r.y = ny;\n\n  const g = document.getElementById('res_' + slug(draggingNode.rid));\n  if (g) g.setAttribute('transform', `translate(${nx},${ny})`);\n  updateAllEdges();\n});\n\nsvg.addEventListener('pointerup', () => {\n  rotating = null;\n  draggingNode = null;\n  draggingPan = null;\n  if (RELAX_ON_POINTERUP) {\n    resolveOverlaps();\n    updateAllEdges();\n  }\n});\nsvg.addEventListener('pointercancel', () => {\n  rotating = null;\n  draggingNode = null;\n  draggingPan = null;\n});\n\nsvg.addEventListener('wheel', (evt) => {\n  if (!panZoomEnabled) return;\n  evt.preventDefault();\n\n  const p = svgPoint(evt);\n  const zoomFactor = Math.exp(-evt.deltaY * 0.0016);\n\n  const k0 = view.k;\n  const k1 = Math.max(0.2, Math.min(8.0, k0 * zoomFactor));\n  if (k1 === k0) return;\n\n  const sx = (p.x - view.x) / k0;\n  const sy = (p.y - view.y) / k0;\n\n  view.k = k1;\n  view.x = p.x - sx * k1;\n  view.y = p.y - sy * k1;\n  applyView();\n}, {passive:false});\n\nfunction applyHbondVisibilityByFilter() {\n  for (const e of EDGES) {\n    if (e.type !== 'hbond') continue;\n    const lid = 'h_' + slug(e.ra) + '_' + e.a + '__' + slug(e.rb) + '_' + e.b;\n    const line = document.getElementById(lid);\n    const text = document.getElementById(lid + '_t');\n    const show = (!hbOnly) || (HB_RES.has(e.ra) && HB_RES.has(e.rb));\n    if (line) line.style.display = show ? '' : 'none';\n    if (text) text.style.display = show ? '' : 'none';\n  }\n}\n\nresolveOverlaps();\nfor (const rid of Object.keys(RES)) setAtomBlockRotation(rid);\nupdateAllEdges();\nfitViewToResidues();\napplyView();\napplyContactsVisibility();\napplyResidueFilter();\napplyHbondVisibilityByFilter();\n\n// -----------------------------\n// Theme + AA label toggle (added)\n// -----------------------------\nconst btnAA = document.getElementById(\"btnAA\");\nconst btnTheme = document.getElementById(\"btnTheme\");\nconst themePanel = document.getElementById(\"themePanel\");\nconst btnThemeReset = document.getElementById(\"btnThemeReset\");\nconst btnThemeClose = document.getElementById(\"btnThemeClose\");\n\nfunction $(id) { return document.getElementById(id); }\n\nconst THEME_DEFAULT = {\n  positive: {fill: \"#ff6d60\", stroke: \"#b23b32\"},\n  negative: {fill: \"#6aa9ff\", stroke: \"#2e5aa8\"},\n  polar: {fill: \"#ffd54f\", stroke: \"#c49000\"},\n  special: {fill: \"#99F6E4\", stroke: \"#0F766E\"},\n  hydrophobic: {fill: \"#d0d0d0\", stroke: \"#7a7a7a\"},\n  other: {fill: \"#95A5A6\", stroke: \"#666666\"},\n  posAtom: \"#FF6D00\",\n  negAtom: \"#6A1B9A\",\n  disAtom: \"#FFD54F\",\n  alpha: 0.22\n};\n\n\nfunction safeStorageGet(key, fallback=null) {\n  try {\n    const v = window.localStorage.getItem(key);\n    return (v === null || v === undefined) ? fallback : v;\n  } catch (e) {\n    return fallback;\n  }\n}\nfunction safeStorageSet(key, value) {\n  try { window.localStorage.setItem(key, value); } catch (e) {}\n}\n\nfunction loadTheme() {\n  try {\n    const s = safeStorageGet(\"dimplot_theme_v1\");\n    if (!s) return JSON.parse(JSON.stringify(THEME_DEFAULT));\n    const t = JSON.parse(s);\n    const out = JSON.parse(JSON.stringify(THEME_DEFAULT));\n    for (const k of Object.keys(out)) if (k in t) out[k] = t[k];\n    for (const k of [\"positive\",\"negative\",\"polar\",\"special\",\"hydrophobic\",\"other\"]) {\n      if (t[k]) {\n        out[k].fill = t[k].fill || out[k].fill;\n        out[k].stroke = t[k].stroke || out[k].stroke;\n      }\n    }\n    return out;\n  } catch (e) {\n    return JSON.parse(JSON.stringify(THEME_DEFAULT));\n  }\n}\nlet THEME = loadTheme();\n\nconst POS_CHARGE = {\"LYS\": [\"NZ\"], \"ARG\": [\"NE\", \"NH1\", \"NH2\"], \"HIS\": [\"ND1\", \"NE2\"]};\nconst NEG_CHARGE = {\"ASP\": [\"OD1\", \"OD2\"], \"GLU\": [\"OE1\", \"OE2\"]};\n\nfunction isPosCharge(res3, atomName) {\n  res3 = (res3||\"\").toUpperCase();\n  atomName = (atomName||\"\").toUpperCase();\n  return (POS_CHARGE[res3] || []).includes(atomName);\n}\nfunction isNegCharge(res3, atomName) {\n  res3 = (res3||\"\").toUpperCase();\n  atomName = (atomName||\"\").toUpperCase();\n  return (NEG_CHARGE[res3] || []).includes(atomName);\n}\n\nfunction hexToRgb(hex) {\n  const h = (hex||\"\").replace(\"#\",\"\");\n  if (h.length !== 6) return [0,0,0];\n  return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];\n}\nfunction rgba(hex, a) {\n  const [r,g,b] = hexToRgb(hex);\n  return `rgba(${r},${g},${b},${a})`;\n}\n\nfunction syncColorInputs() {\n  if (!themePanel) return;\n  $(\"cPosFill\").value = THEME.positive.fill;\n  $(\"cPosStroke\").value = THEME.positive.stroke;\n  $(\"cNegFill\").value = THEME.negative.fill;\n  $(\"cNegStroke\").value = THEME.negative.stroke;\n  $(\"cPolFill\").value = THEME.polar.fill;\n  $(\"cPolStroke\").value = THEME.polar.stroke;\n  $(\"cSpeFill\").value = THEME.special.fill;\n  $(\"cSpeStroke\").value = THEME.special.stroke;\n  $(\"cHydFill\").value = THEME.hydrophobic.fill;\n  $(\"cHydStroke\").value = THEME.hydrophobic.stroke;\n  $(\"cPosAtom\").value = THEME.posAtom;\n  $(\"cNegAtom\").value = THEME.negAtom;\n  $(\"cDisAtom\").value = THEME.disAtom;\n}\n\nfunction applyTheme() {\n  for (const [rid, r] of Object.entries(RES)) {\n    const g = document.getElementById(\"res_\" + slug(rid));\n    if (!g) continue;\n    const cls = r.cls || \"other\";\n    const c = THEME[cls] || THEME.other;\n\n    if (r.focus) {\n      const center = g.querySelector(\"circle.center\");\n      if (center) {\n        center.setAttribute(\"fill\", c.fill);\n        center.setAttribute(\"opacity\", String(THEME.alpha));\n      }\n      const t = g.querySelector(\"text.resLabel\");\n      if (t) t.setAttribute(\"fill\", c.stroke);\n    } else {\n      const node = g.querySelector(\"circle.node\");\n      const t = g.querySelector(\"text.nodeLabel\");\n      if (node) {\n        node.setAttribute(\"fill\", c.fill);\n        node.setAttribute(\"fill-opacity\", String(THEME.alpha));\n        node.setAttribute(\"stroke\", c.stroke);\n      }\n      if (t) t.setAttribute(\"fill\", c.stroke);\n    }\n  }\n\n  document.querySelectorAll(\".lgPill\").forEach(el => {\n    const cls = el.getAttribute(\"data-cls\") || \"other\";\n    const c = THEME[cls] || THEME.other;\n    el.style.background = rgba(c.fill, THEME.alpha);\n    el.style.borderColor = c.stroke;\n    el.style.color = c.stroke;\n  });\n\n  document.querySelectorAll(\".lgDot\").forEach(el => {\n    const key = el.getAttribute(\"data-atomkey\") || \"\";\n    if (key === \"posAtom\") el.style.background = THEME.posAtom;\n    else if (key === \"negAtom\") el.style.background = THEME.negAtom;\n    else if (key === \"disAtom\") el.style.background = THEME.disAtom;\n  });\n\n  document.querySelectorAll(\"circle.atom\").forEach(el => {\n    const name = el.getAttribute(\"data-name\") || \"\";\n    const g = el.closest(\"g.res\");\n    const res3 = g ? (g.getAttribute(\"data-res3\") || \"\") : \"\";\n    if ((res3 || \"\").toUpperCase() === \"CYS\" && (name || \"\").toUpperCase() === \"SG\") {\n      el.setAttribute(\"fill\", THEME.disAtom);\n    } else if (isPosCharge(res3, name)) el.setAttribute(\"fill\", THEME.posAtom);\n    else if (isNegCharge(res3, name)) el.setAttribute(\"fill\", THEME.negAtom);\n  });\n\n  syncColorInputs();\n}\n\nfunction saveTheme() {\n  safeStorageSet(\"dimplot_theme_v1\", JSON.stringify(THEME));\n}\n\nfunction wireColorInputs() {\n  const pairs = [\n    [\"cPosFill\", [\"positive\",\"fill\"]], [\"cPosStroke\", [\"positive\",\"stroke\"]],\n    [\"cNegFill\", [\"negative\",\"fill\"]], [\"cNegStroke\", [\"negative\",\"stroke\"]],\n    [\"cPolFill\", [\"polar\",\"fill\"]], [\"cPolStroke\", [\"polar\",\"stroke\"]],\n    [\"cSpeFill\", [\"special\",\"fill\"]], [\"cSpeStroke\", [\"special\",\"stroke\"]],\n    [\"cHydFill\", [\"hydrophobic\",\"fill\"]], [\"cHydStroke\", [\"hydrophobic\",\"stroke\"]],\n  ];\n  for (const [id, path] of pairs) {\n    $(id).addEventListener(\"input\", e => {\n      THEME[path[0]][path[1]] = e.target.value;\n      saveTheme();\n      applyTheme();\n    });\n  }\n  $(\"cPosAtom\").addEventListener(\"input\", e => {\n    THEME.posAtom = e.target.value;\n    saveTheme();\n    applyTheme();\n  });\n  $(\"cNegAtom\").addEventListener(\"input\", e => {\n    THEME.negAtom = e.target.value;\n    saveTheme();\n    applyTheme();\n  });\n  $(\"cDisAtom\").addEventListener(\"input\", e => {\n    THEME.disAtom = e.target.value;\n    saveTheme();\n    applyTheme();\n  });\n}\n\n\n// -----------------------------\n// Chain label renaming (GUI)\n// -----------------------------\nfunction applyChainNames(nameA, nameB) {{\n  const a = document.getElementById(\"chainA_label\");\n  const b = document.getElementById(\"chainB_label\");\n  if (a) a.textContent = nameA || \"Chain A\";\n  if (b) b.textContent = nameB || \"Chain B\";\n}}\n\nfunction loadChainNames() {{\n  const nameA = safeStorageGet(\"chainAName\") || \"Chain A\";\n  const nameB = safeStorageGet(\"chainBName\") || \"Chain B\";\n  return [nameA, nameB];\n}}\n\nfunction saveChainNames(nameA, nameB) {{\n  safeStorageSet(\"chainAName\", nameA || \"Chain A\");\n  safeStorageSet(\"chainBName\", nameB || \"Chain B\");\n}}\n\nfunction wireChainInputs() {{\n  const inpA = document.getElementById(\"chainAName\");\n  const inpB = document.getElementById(\"chainBName\");\n  const btnReset = document.getElementById(\"btnChainReset\");\n  if (!inpA || !inpB) return;\n\n  const [nameA0, nameB0] = loadChainNames();\n  inpA.value = nameA0;\n  inpB.value = nameB0;\n  applyChainNames(nameA0, nameB0);\n\n  function commit() {{\n    const nameA = (inpA.value || \"\").trim() || \"Chain A\";\n    const nameB = (inpB.value || \"\").trim() || \"Chain B\";\n    saveChainNames(nameA, nameB);\n    applyChainNames(nameA, nameB);\n  }}\n\n  inpA.addEventListener(\"input\", commit);\n  inpB.addEventListener(\"input\", commit);\n\n  if (btnReset) {{\n    btnReset.addEventListener(\"click\", () => {{\n      inpA.value = \"Chain A\";\n      inpB.value = \"Chain B\";\n      commit();\n    }});\n  }}\n}}\n\nlet aaMode = (safeStorageGet(\"dimplot_aa_mode\", \"3\") || \"3\");\nfunction applyAAMode() {\n  for (const [rid, r] of Object.entries(RES)) {\n    const g = document.getElementById(\"res_\" + slug(rid));\n    if (!g) continue;\n    const txt = r.focus ? g.querySelector(\"text.resLabel\") : g.querySelector(\"text.nodeLabel\");\n    if (!txt) continue;\n    txt.textContent = (aaMode === \"1\") ? (r.label1 || r.label3 || r.label) : (r.label3 || r.label);\n  }\n  btnAA.textContent = (aaMode === \"1\") ? \"AA labels: 1-letter\" : \"AA labels: 3-letter\";\n}\nfunction saveAAMode() { safeStorageSet(\"dimplot_aa_mode\", aaMode); }\n\nbtnAA.addEventListener(\"click\", () => {\n  aaMode = (aaMode === \"1\") ? \"3\" : \"1\";\n  saveAAMode();\n  applyAAMode();\n});\n\nbtnTheme.addEventListener(\"click\", () => {\n  const open = (themePanel.style.display === \"none\");\n  themePanel.style.display = open ? \"\" : \"none\";\n  if (open) {\n    positionThemePanel();\n    syncColorInputs();\n  }\n});\n\nwindow.addEventListener(\"resize\", () => {\n  if (themePanel.style.display !== \"none\") positionThemePanel();\n});\nwindow.addEventListener(\"orientationchange\", () => {\n  if (themePanel.style.display !== \"none\") {\n    // Wait one frame so viewport sizes settle\n    requestAnimationFrame(() => positionThemePanel());\n  }\n});\n\nbtnThemeClose.addEventListener(\"click\", () => {\n  themePanel.style.display = \"none\";\n});\nbtnThemeReset.addEventListener(\"click\", () => {\n  THEME = JSON.parse(JSON.stringify(THEME_DEFAULT));\n  saveTheme();\n  applyTheme();\n});\n\nwireColorInputs();\n\nfunction positionThemePanel() {\n  // Keep theme panel within viewport (esp. mobile landscape) and above legend bar.\n  try {\n    const topbarRect = topbar.getBoundingClientRect();\n    const legendRect = legendbar.getBoundingClientRect();\n    const vw = window.innerWidth || document.documentElement.clientWidth;\n    const vh = window.innerHeight || document.documentElement.clientHeight;\n\n    // Use fixed positioning so the panel never goes off-screen when the page is zoomed/scaled.\n    themePanel.style.position = \"fixed\";\n    themePanel.style.right = \"10px\";\n\n    const top = Math.max(10, Math.round(topbarRect.bottom + 8));\n    const safeBottom = Math.min(vh - 10, Math.round(legendRect.top - 8));\n    const maxH = Math.max(120, safeBottom - top);\n\n    themePanel.style.top = top + \"px\";\n    themePanel.style.maxHeight = maxH + \"px\";\n\n    // If extremely constrained, allow the panel to take full height (still scrollable).\n    if (maxH < 180) {\n      themePanel.style.top = \"10px\";\n      themePanel.style.maxHeight = Math.max(120, vh - 20) + \"px\";\n    }\n\n    // Keep width sensible on narrow screens\n    themePanel.style.width = \"min(92vw, 380px)\";\n    themePanel.style.zIndex = \"30\";\n  } catch (e) {}\n}\n\nwireChainInputs();\n\n\n// Session export/import (positions, view, and options)\nconst btnSessionExport = document.getElementById(\"btnSessionExport\");\nconst btnSessionImport = document.getElementById(\"btnSessionImport\");\nconst sessionModal = document.getElementById(\"sessionModal\");\nconst btnSessionClose = document.getElementById(\"btnSessionClose\");\nconst btnSessionCopy = document.getElementById(\"btnSessionCopy\");\nconst btnSessionDownload = document.getElementById(\"btnSessionDownload\");\nconst btnSessionApply = document.getElementById(\"btnSessionApply\");\nconst sessionTextarea = document.getElementById(\"sessionTextarea\");\nconst sessionFile = document.getElementById(\"sessionFile\");\n\nfunction openSessionModal(text=\"\") {\n  if (!sessionModal) return;\n  sessionTextarea.value = text || \"\";\n  sessionModal.style.display = \"block\";\n  sessionTextarea.focus();\n  sessionTextarea.select();\n}\n\nfunction closeSessionModal() {\n  if (!sessionModal) return;\n  sessionModal.style.display = \"none\";\n}\n\nfunction _safeCopy(text) {\n  // Try clipboard API first (may fail on file://)\n  if (navigator.clipboard && navigator.clipboard.writeText) {\n    navigator.clipboard.writeText(text).catch(() => {});\n    return;\n  }\n  // Fallback\n  try {\n    sessionTextarea.focus();\n    sessionTextarea.select();\n    document.execCommand(\"copy\");\n  } catch (e) {}\n}\n\nfunction collectSessionState() {\n  // capture residue positions + focus rotations/atom offsets\n  const residues = {};\n  for (const [rid, r] of Object.entries(RES)) {\n    residues[rid] = {\n      x: r.x, y: r.y,\n      rot: (r.rot || 0),\n      aox: (r.aox || 0), aoy: (r.aoy || 0)\n    };\n  }\n  // chain labels\n  let chainA = (safeStorageGet(\"dimplot_chainA\") || \"Chain A\");\n  let chainB = (safeStorageGet(\"dimplot_chainB\") || \"Chain B\");\n  try {\n    const a = document.getElementById(\"chainAName\");\n    const b = document.getElementById(\"chainBName\");\n    if (a && a.value) chainA = a.value.trim() || chainA;\n    if (b && b.value) chainB = b.value.trim() || chainB;\n  } catch(e) {}\n\n  return {\n    schema: \"DIMPLOTViewer.session.v1\",\n    createdAt: new Date().toISOString(),\n    theme: THEME,\n    chainA, chainB,\n    aaMode: (typeof aaMode !== \"undefined\" ? aaMode : \"3\"),\n    view: {x: view.x, y: view.y, k: view.k},\n    flags: {\n      dragEnabled, chainSideLock, panZoomEnabled,\n      contactsVisible, hbOnly\n    },\n    residues\n  };\n}\n\nfunction applySessionState(st) {\n  if (!st || typeof st !== \"object\") return;\n\n  // Theme\n  if (st.theme && typeof st.theme === \"object\") {\n    for (const k of Object.keys(THEME)) {\n      if (k in st.theme) THEME[k] = st.theme[k];\n    }\n    applyTheme();\n    try { wireColorInputs(); } catch (e) {}\n  }\n\n  // Chain labels\n  if (typeof st.chainA === \"string\" || typeof st.chainB === \"string\") {\n    const a = (st.chainA || \"Chain A\");\n    const b = (st.chainB || \"Chain B\");\n    try {\n      safeStorageSet(\"dimplot_chainA\", a);\n      safeStorageSet(\"dimplot_chainB\", b);\n    } catch(e) {}\n    try {\n      const inpA = document.getElementById(\"chainAName\");\n      const inpB = document.getElementById(\"chainBName\");\n      if (inpA) inpA.value = a;\n      if (inpB) inpB.value = b;\n      applyChainNames(a,b);\n    } catch(e) {}\n  }\n\n  // AA mode\n  if (st.aaMode === \"1\" || st.aaMode === \"3\") {\n    aaMode = st.aaMode;\n    try { safeStorageSet(\"dimplot_aa_mode\", aaMode); } catch(e) {}\n    applyAAMode();\n    try {\n      const btn = document.getElementById(\"btnAA\");\n      if (btn) btn.textContent = (aaMode === \"1\" ? \"1-letter\" : \"3-letter\");\n    } catch(e) {}\n  }\n\n  // View (zoom/pan)\n  if (st.view && typeof st.view === \"object\") {\n    if (typeof st.view.x === \"number\") view.x = st.view.x;\n    if (typeof st.view.y === \"number\") view.y = st.view.y;\n    if (typeof st.view.k === \"number\") view.k = st.view.k;\n    applyView();\n  }\n\n  // Flags\n  if (st.flags && typeof st.flags === \"object\") {\n    if (typeof st.flags.dragEnabled === \"boolean\") dragEnabled = st.flags.dragEnabled;\n    if (typeof st.flags.chainSideLock === \"boolean\") chainSideLock = st.flags.chainSideLock;\n    if (typeof st.flags.panZoomEnabled === \"boolean\") panZoomEnabled = st.flags.panZoomEnabled;\n    if (typeof st.flags.contactsVisible === \"boolean\") contactsVisible = st.flags.contactsVisible;\n    if (typeof st.flags.hbOnly === \"boolean\") hbOnly = st.flags.hbOnly;\n\n    // sync buttons (do NOT trigger side effects beyond display)\n    try {\n      btnDrag.classList.toggle('on', dragEnabled);\n      btnDrag.textContent = dragEnabled ? \"Drag ON\" : \"Drag OFF\";\n    } catch(e) {}\n    try {\n      btnLock.classList.toggle('on', chainSideLock);\n      btnLock.textContent = chainSideLock ? \"Lock ON\" : \"Lock OFF\";\n    } catch(e) {}\n    try {\n      btnPan.classList.toggle('on', panZoomEnabled);\n      btnPan.textContent = panZoomEnabled ? \"Pan ON\" : \"Pan OFF\";\n    } catch(e) {}\n    try {\n      btnContacts.classList.toggle('on', contactsVisible);\n      btnContacts.textContent = contactsVisible ? \"Contacts ON\" : \"Contacts OFF\";\n    } catch(e) {}\n    try {\n      btnHBOnly.classList.toggle('on', hbOnly);\n      btnHBOnly.textContent = hbOnly ? \"H-bond only: ON\" : \"H-bond only: OFF\";\n    } catch(e) {}\n  }\n\n  // Residues positions/rotations\n  if (st.residues && typeof st.residues === \"object\") {\n    for (const [rid, s] of Object.entries(st.residues)) {\n      const r = RES[rid];\n      if (!r || !s) continue;\n      if (typeof s.x === \"number\") r.x = s.x;\n      if (typeof s.y === \"number\") r.y = s.y;\n      if (typeof s.rot === \"number\") r.rot = s.rot;\n      if (typeof s.aox === \"number\") r.aox = s.aox;\n      if (typeof s.aoy === \"number\") r.aoy = s.aoy;\n\n      const g = document.getElementById(\"res_\" + slug(rid));\n      if (g) g.setAttribute(\"transform\", `translate(${r.x},${r.y})`);\n      if (r.focus) setAtomBlockRotation(rid);\n    }\n    updateAllEdges();\n  }\n\n  // Re-apply filters/visibility and HB top labels\n  try { applyResidueFilter(); } catch(e) {}\n  try { applyHbondVisibilityByFilter(); } catch(e) {}\n  try { autoPlaceFocusTopLabelsAndPull(); } catch(e) {}\n  try { updateAllEdges(); } catch(e) {}\n}\n\nfunction downloadText(filename, text) {\n  try {\n    const blob = new Blob([text], {type:\"application/json\"});\n    const url = URL.createObjectURL(blob);\n    const a = document.createElement(\"a\");\n    a.href = url;\n    a.download = filename;\n    document.body.appendChild(a);\n    a.click();\n    a.remove();\n    setTimeout(() => URL.revokeObjectURL(url), 1500);\n  } catch (e) {}\n}\n\nif (btnSessionExport) {\n  btnSessionExport.addEventListener(\"click\", (e) => {\n    e.preventDefault();\n    e.stopPropagation();\n    const st = collectSessionState();\n    const json = JSON.stringify(st, null, 2);\n    openSessionModal(json);\n  });\n}\nif (btnSessionImport) {\n  btnSessionImport.addEventListener(\"click\", (e) => {\n    e.preventDefault();\n    e.stopPropagation();\n    openSessionModal(\"\");\n    // open file picker as convenience (user can cancel)\n    try { sessionFile.click(); } catch(err) {}\n  });\n}\nif (btnSessionClose) btnSessionClose.addEventListener(\"click\", (e)=>{ e.preventDefault(); closeSessionModal(); });\nif (sessionModal) {\n  // clicking backdrop closes\n  sessionModal.addEventListener(\"pointerdown\", (e)=>{ if (e.target === sessionModal) closeSessionModal(); });\n  // prevent canvas gesture stealing\n  sessionModal.addEventListener(\"pointerdown\", (e)=>{ e.stopPropagation(); }, true);\n}\n\nif (btnSessionCopy) btnSessionCopy.addEventListener(\"click\", ()=>{ _safeCopy(sessionTextarea.value || \"\"); });\n\nif (btnSessionDownload) btnSessionDownload.addEventListener(\"click\", ()=>{\n  const txt = sessionTextarea.value || \"\";\n  if (!txt.trim()) return;\n  downloadText(\"2DPPIViewer_session.json\", txt);\n});\n\nif (btnSessionApply) btnSessionApply.addEventListener(\"click\", ()=>{\n  const txt = sessionTextarea.value || \"\";\n  if (!txt.trim()) return;\n  try {\n    const st = JSON.parse(txt);\n    applySessionState(st);\n    closeSessionModal();\n  } catch (e) {\n    alert(\"Invalid JSON.\");\n  }\n});\n\nif (sessionFile) {\n  sessionFile.addEventListener(\"change\", async ()=>{\n    const f = sessionFile.files && sessionFile.files[0];\n    if (!f) return;\n    try {\n      const txt = await f.text();\n      sessionTextarea.value = txt;\n    } catch(e) {}\n  });\n}\n\n// Prevent theme panel inputs from triggering canvas drag on mobile\nif (themePanel) {\n  themePanel.addEventListener(\"pointerdown\", (e)=>{ e.stopPropagation(); }, true);\n  themePanel.addEventListener(\"touchstart\", (e)=>{ e.stopPropagation(); }, true);\n}\n\n\n// -----------------------------\n// Touch pinch-zoom (mobile) (added)\n// - Only intercept when 2 fingers are active, so single-finger drag stays unchanged.\n// -----------------------------\n(function(){\n  const pts = new Map(); // pointerId -> {x,y}\n  let pinching = false;\n  let pinch0 = null; // {dist, midx, midy, viewx, viewy, viewk}\n\n  function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }\n  function mid(a,b){ return {x:(a.x+b.x)/2, y:(a.y+b.y)/2}; }\n\n  svg.addEventListener(\"pointerdown\", (evt)=>{\n    if (evt.pointerType !== \"touch\") return;\n    if (evt.target.closest(\"#topbar\") || evt.target.closest(\"#themePanel\") || evt.target.closest(\"#sessionModal\")) return;\n    const p = svgPoint(evt);\n    pts.set(evt.pointerId, {x:p.x, y:p.y});\n    if (pts.size === 2) {\n      const arr = Array.from(pts.values());\n      const d0 = dist(arr[0], arr[1]);\n      const m0 = mid(arr[0], arr[1]);\n      pinching = true;\n      pinch0 = {dist:d0, midx:m0.x, midy:m0.y, viewx:view.x, viewy:view.y, viewk:view.k};\n      // Stop other handlers (drag/pan) only once pinch starts\n      evt.preventDefault();\n      evt.stopImmediatePropagation();\n    }\n  }, {capture:true});\n\n  svg.addEventListener(\"pointermove\", (evt)=>{\n    if (!pinching) return;\n    if (evt.pointerType !== \"touch\") return;\n    if (!pts.has(evt.pointerId)) return;\n    const p = svgPoint(evt);\n    pts.set(evt.pointerId, {x:p.x, y:p.y});\n    if (pts.size !== 2 || !pinch0) return;\n\n    const arr = Array.from(pts.values());\n    const d = dist(arr[0], arr[1]);\n    const m = mid(arr[0], arr[1]);\n    const scale = (d && pinch0.dist) ? (d / pinch0.dist) : 1;\n\n    const newK = Math.min(8, Math.max(0.2, pinch0.viewk * scale));\n    view.k = newK;\n    // Pan with midpoint movement (screen space)\n    view.x = pinch0.viewx + (m.x - pinch0.midx);\n    view.y = pinch0.viewy + (m.y - pinch0.midy);\n\n    applyView();\n    evt.preventDefault();\n    evt.stopImmediatePropagation();\n  }, {capture:true});\n\n  function end(evt){\n    if (evt && pts.has(evt.pointerId)) pts.delete(evt.pointerId);\n    if (pts.size < 2) { pinching = false; pinch0 = null; }\n  }\n  svg.addEventListener(\"pointerup\",   (evt)=>{ end(evt); }, {capture:true});\n  svg.addEventListener(\"pointercancel\",(evt)=>{ end(evt); }, {capture:true});\n})();\n\napplyTheme();\napplyAAMode();\n// Initial focus label placement (avoid atom-label overlap on first load)\nrequestAnimationFrame(() => {\n  requestAnimationFrame(() => {\n    try { autoPlaceFocusTopLabelsAndPull(); } catch (e) { console.warn('init focus label placement failed', e); }\n  });\n});\n\n\nfunction makeSnapshotHtml() {\n  const st = collectSessionState();\n  const marker = '<script>window.__DIMPLOT_SESSION__ = ' + JSON.stringify(st) + ';<\\\\/script>';\n  const html = document.documentElement.outerHTML;\n  if (html.includes('</body>')) return html.replace('</body>', marker + '\\\\n</body>');\n  return html + marker;\n}\n\n(function(){\n  const st = window.__DIMPLOT_SESSION__;\n  if (!st) return;\n  try { applySessionState(st); } catch (e) {}\n  requestAnimationFrame(() => {\n    requestAnimationFrame(() => {\n      try { autoPlaceFocusTopLabelsAndPull(); } catch (e) {}\n      try { updateAllEdges(); } catch (e) {}\n    });\n  });\n})();\n\n<\/script>\n</body>\n</html>\n";
+const UI = {
+  title: "2DPPI-Viewer",
+  btn_drag_on: "Drag nodes: ON",
+  btn_drag_off: "Drag nodes: OFF",
+  btn_lock_on: "Chain-side lock: ON",
+  btn_lock_off: "Chain-side lock: OFF",
+  btn_pan_on: "Pan & Zoom: ON",
+  btn_pan_off: "Pan & Zoom: OFF",
+  btn_contacts_on: "Contacts: ON",
+  btn_contacts_off: "Contacts: OFF",
+  btn_hbonly_on: "H-bond residues only: ON",
+  btn_hbonly_off: "H-bond residues only: OFF",
+  btn_fit: "Fit to view",
+  btn_reset: "Reset",
+  btn_export: "Export SVG",
+  hint: "Drag residues • Wheel zoom • Pan: Shift-drag or middle mouse on background • Alt + drag (focus residue) rotates its atom diagram • Green dashed = H-bond (distance) • Yellow dashed = disulfide • Gray = contact"
+};
+const POSITIVE = new Set(["ARG","LYS","HIS"]);
+const NEGATIVE = new Set(["ASP","GLU"]);
+const POLAR_UNCHARGED = new Set(["SER","THR","ASN","GLN","TYR","CYS"]);
+const SPECIAL = new Set(["GLY","PRO"]);
+const HYDROPHOBIC = new Set(["ALA","VAL","LEU","ILE","MET","PHE","TRP"]);
+const POS_CHARGE_ATOMNAMES = {
+  LYS: new Set(["NZ"]),
+  ARG: new Set(["NE", "NH1", "NH2"]),
+  HIS: new Set(["ND1", "NE2"]),
+};
+const NEG_CHARGE_ATOMNAMES = {
+  ASP: new Set(["OD1", "OD2"]),
+  GLU: new Set(["OE1", "OE2"]),
+};
+const POS_CHARGE_COLOR = "#FF6D00";
+const NEG_CHARGE_COLOR = "#6A1B9A";
+const DISULPHIDE_COLOR = "#FFD54F";
+const AA1 = {
+  ALA:"A",ARG:"R",ASN:"N",ASP:"D",CYS:"C",GLN:"Q",GLU:"E",GLY:"G",HIS:"H",ILE:"I",
+  LEU:"L",LYS:"K",MET:"M",PHE:"F",PRO:"P",SER:"S",THR:"T",TRP:"W",TYR:"Y",VAL:"V",
+};
+const DEFAULTS = {
+  width: 1600,
+  height: 900,
+  margin: 80,
+  atom_scale: 3.0,
+  split_extra: 35.0,
+  x_expand: 1.50,
+  y_expand: 1.00,
+  simple_r: 20.0,
+  focus_r: 44.0,
+  boundary_extend_px: 500.0,
+  atom_label_mode: "atomname",
+  show_atom_labels_for_all: false,
+  chain_label_offset_px: 26.0
+};
+
+let currentBlobUrl = null;
+let currentViewerHtml = "";
+
+function setStatus(msg) {
+  document.getElementById("status").textContent = msg;
+}
+
+function cleanResLabel(line) {
+  const m = line.trim().match(/([A-Za-z]{3}\d+\([^)]+\))\s*$/);
+  if (m) return m[1];
+  const toks = line.trim().split(/\s+/);
+  return toks.length ? toks[toks.length - 1] : line.trim();
+}
+function isResLabel(s) {
+  const t = (s || "").trim();
+  return /[A-Za-z]/.test(t) && /\d/.test(t) && !/^\d+(\.\d+)?$/.test(t);
+}
+function slug(s) {
+  return String(s).replace(/[^A-Za-z0-9_]+/g, "_");
+}
+function displayResName(resId) {
+  return String(resId).replace(/\([^)]+\)\s*$/, "").trim();
+}
+function extractChain(resId) {
+  const m = String(resId).match(/\(([^)]+)\)\s*$/);
+  if (!m) return "?";
+  const ch = m[1].trim();
+  return ch ? ch[0] : "?";
+}
+function res3FromLabel(resId) {
+  const name = displayResName(resId);
+  const m = name.match(/^([A-Za-z]{3})/);
+  return m ? m[1].toUpperCase() : "UNK";
+}
+function residueClass(res3) {
+  const r = String(res3 || "").toUpperCase();
+  if (POSITIVE.has(r)) return "positive";
+  if (NEGATIVE.has(r)) return "negative";
+  if (POLAR_UNCHARGED.has(r)) return "polar";
+  if (SPECIAL.has(r)) return "special";
+  if (HYDROPHOBIC.has(r)) return "hydrophobic";
+  return "other";
+}
+function label1FromLabel(label3) {
+  const t = String(label3 || "").trim();
+  const m = t.match(/^([A-Za-z]{3})(.*)$/);
+  if (!m) return t;
+  return (AA1[m[1].toUpperCase()] || "X") + m[2];
+}
+function atomColor(el) {
+  const u = String(el || "").toUpperCase();
+  if (u === "C") return "#222";
+  if (u === "O") return "#D32F2F";
+  if (u === "N") return "#1976D2";
+  if (u === "S") return "#F9A825";
+  if (u === "P") return "#8E24AA";
+  return "#555";
+}
+function classColors(cls) {
+  if (cls === "positive") return ["#ff6d60", "#b23b32"];
+  if (cls === "negative") return ["#6aa9ff", "#2e5aa8"];
+  if (cls === "polar") return ["#ffd54f", "#c49000"];
+  if (cls === "special") return ["#99F6E4", "#0F766E"];
+  if (cls === "hydrophobic") return ["#d0d0d0", "#7a7a7a"];
+  return ["#95A5A6", "#666666"];
+}
+function overrideAtomColor(res3, atomName, baseColor) {
+  const r = String(res3 || "").toUpperCase();
+  const a = String(atomName || "").toUpperCase();
+  if (POS_CHARGE_ATOMNAMES[r] && POS_CHARGE_ATOMNAMES[r].has(a)) return POS_CHARGE_COLOR;
+  if (NEG_CHARGE_ATOMNAMES[r] && NEG_CHARGE_ATOMNAMES[r].has(a)) return NEG_CHARGE_COLOR;
+  if (r === "CYS" && a === "SG") return DISULPHIDE_COLOR;
+  return baseColor;
+}
+function esc(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function parseDrwText(text) {
+  const lines = String(text).replace(/\r\n?/g, "\n").split("\n");
+  const residues = [];
+  const atomByIdx = new Map();
+  let i = 0;
+  while (i < lines.length) {
+    if (lines[i].trim().startsWith("#R")) {
+      i += 1;
+      if (i >= lines.length) break;
+      const resLabel = cleanResLabel(lines[i].trim());
+      if (!isResLabel(resLabel)) {
+        i += 1;
+        continue;
+      }
+      const chain = extractChain(resLabel);
+      while (i < lines.length && lines[i].trim() !== "#A") i += 1;
+      if (i >= lines.length) break;
+      i += 1;
+      const atoms = [];
+      while (i < lines.length && !lines[i].trim().startsWith("#")) {
+        const l = lines[i];
+        const mid = l.match(/\[(\d+)\]\s*$/);
+        if (mid) {
+          const idx = parseInt(mid[1], 10);
+          const parts = l.trim().split(/\s+/);
+          if (parts.length >= 6) {
+            const x = parseFloat(parts[1]);
+            const y = parseFloat(parts[2]);
+            if (Number.isFinite(x) && Number.isFinite(y)) {
+              const name = parts[0];
+              const element = parts[5];
+              atomByIdx.set(idx, {
+                idx, name, x, y, element,
+                res: resLabel,
+                chain
+              });
+              atoms.push(idx);
+            }
+          }
+        }
+        i += 1;
+      }
+      residues.push({ id: resLabel, chain, atoms });
+      continue;
+    }
+    i += 1;
+  }
+
+  const bonds = [];
+  const hbonds = [];
+  const contacts = [];
+  const disulphides = [];
+  for (const l of lines) {
+    const m = l.match(/^\s*([0125])\s+(\d+)\s+(\d+)(.*)$/);
+    if (!m) continue;
+    const t = parseInt(m[1], 10);
+    const a = parseInt(m[2], 10);
+    const b = parseInt(m[3], 10);
+    const rest = (m[4] || "").trim();
+    if (!atomByIdx.has(a) || !atomByIdx.has(b)) continue;
+    if (t === 0) {
+      const order = rest ? rest.split(/\s+/)[0] : "1";
+      bonds.push([a, b, order]);
+    } else if (t === 1) {
+      let dist = null;
+      if (rest) {
+        const v = parseFloat(rest.split(/\s+/)[0]);
+        dist = Number.isFinite(v) ? v : null;
+      }
+      hbonds.push([a, b, dist]);
+    } else if (t === 2) {
+      contacts.push([a, b]);
+    } else if (t === 5) {
+      disulphides.push([a, b]);
+    }
+  }
+  return { residues, atomByIdx, bonds, hbonds, contacts, disulphides };
+}
+
+function computeViewerData(parsed, cfg = DEFAULTS) {
+  const { residues, atomByIdx, bonds, hbonds, contacts, disulphides } = parsed;
+  const resAtoms = Object.fromEntries(residues.map(r => [r.id, r.atoms]));
+  const resChain = Object.fromEntries(residues.map(r => [r.id, r.chain]));
+
+  const resCenter = {};
+  for (const [rid, atoms] of Object.entries(resAtoms)) {
+    const xs = [];
+    const ys = [];
+    for (const a of atoms) {
+      const info = atomByIdx.get(a);
+      if (!info) continue;
+      xs.push(info.x);
+      ys.push(info.y);
+    }
+    if (xs.length) {
+      resCenter[rid] = [xs.reduce((a,b)=>a+b,0)/xs.length, ys.reduce((a,b)=>a+b,0)/ys.length];
+    } else {
+      resCenter[rid] = [0, 0];
+    }
+  }
+
+  const atomLocal = {};
+  for (const [idx, info] of atomByIdx.entries()) {
+    const rid = info.res;
+    if (!atomLocal[rid]) atomLocal[rid] = {};
+    const [cx, cy] = resCenter[rid];
+    atomLocal[rid][String(idx)] = [info.x - cx, info.y - cy, info.element, info.name];
+  }
+
+  const bondsByRes = {};
+  for (const [a, b, order] of bonds) {
+    const ra = atomByIdx.get(a).res;
+    const rb = atomByIdx.get(b).res;
+    if (ra !== rb) continue;
+    if (!bondsByRes[ra]) bondsByRes[ra] = [];
+    bondsByRes[ra].push([String(a), String(b), order]);
+  }
+
+  const focusRes = new Set();
+  const atomHbonds = [];
+  const atomDisulphides = [];
+  for (const [a, b, dist] of hbonds) {
+    const ra = atomByIdx.get(a).res;
+    const rb = atomByIdx.get(b).res;
+    if (ra === rb) continue;
+    if (dist !== null) {
+      focusRes.add(ra);
+      focusRes.add(rb);
+      atomHbonds.push([a, b, dist]);
+    }
+  }
+  for (const [a, b] of disulphides) {
+    const ra = atomByIdx.get(a).res;
+    const rb = atomByIdx.get(b).res;
+    if (ra === rb) continue;
+    focusRes.add(ra);
+    focusRes.add(rb);
+    atomDisulphides.push([a, b]);
+  }
+
+  const contactPairs = new Map();
+  for (const [a, b] of contacts) {
+    const ra = atomByIdx.get(a).res;
+    const rb = atomByIdx.get(b).res;
+    if (ra === rb) continue;
+    const key = [ra, rb].sort().join("\u0000");
+    contactPairs.set(key, (contactPairs.get(key) || 0) + 1);
+  }
+
+  const yVals = Object.values(resCenter).map(v => v[1]);
+  const yRange = yVals.length ? (Math.max(...yVals) - Math.min(...yVals)) : 1.0;
+  const split = (yRange / 2.0) + cfg.split_extra;
+
+  const adjCenter = {};
+  for (const [rid, [x, y]] of Object.entries(resCenter)) {
+    const ch = resChain[rid] || "?";
+    let y2 = y;
+    if (ch === "A") y2 = y - split;
+    else if (ch === "B") y2 = y + split;
+    adjCenter[rid] = [x, y2];
+  }
+
+  const yA = Object.entries(adjCenter).filter(([rid]) => resChain[rid] === "A").map(([,v]) => v[1]);
+  const yB = Object.entries(adjCenter).filter(([rid]) => resChain[rid] === "B").map(([,v]) => v[1]);
+  const boundary = (yA.length && yB.length) ? ((Math.max(...yA) + Math.min(...yB)) / 2.0) : 0.0;
+
+  let maxLocal = 0.0;
+  for (const rid of focusRes) {
+    const d = atomLocal[rid] || {};
+    for (const v of Object.values(d)) {
+      maxLocal = Math.max(maxLocal, Math.abs(v[0]), Math.abs(v[1]));
+    }
+  }
+  const extDrw = maxLocal * cfg.atom_scale;
+
+  const xs = [];
+  const ys = [];
+  for (const [rid, [x,y]] of Object.entries(adjCenter)) {
+    const ext = focusRes.has(rid) ? extDrw : 0;
+    xs.push(x - ext, x + ext);
+    ys.push(y - ext, y + ext);
+  }
+  const minx = Math.min(...xs);
+  const maxx = Math.max(...xs);
+  const miny = Math.min(...ys);
+  const maxy = Math.max(...ys);
+  const xSpan = (maxx - minx) || 1.0;
+  const ySpan = (maxy - miny) || 1.0;
+  const scale = Math.min((cfg.width - 2*cfg.margin)/xSpan, (cfg.height - 2*cfg.margin)/ySpan);
+
+  function toScreen(x, y) {
+    return [cfg.margin + (x - minx) * scale, cfg.margin + (y - miny) * scale];
+  }
+
+  const boundaryY = toScreen(minx, boundary)[1];
+
+  const resData = {};
+  for (const [rid, [x, y]] of Object.entries(adjCenter)) {
+    const [sx, sy] = toScreen(x, y);
+    const ch = resChain[rid] || "?";
+    const focus = focusRes.has(rid);
+    const label = displayResName(rid);
+    const res3 = res3FromLabel(rid);
+    const cls = residueClass(res3);
+    const entry = {
+      x: sx,
+      y: sy,
+      chain: ch,
+      focus,
+      label3: label,
+      label1: label1FromLabel(label),
+      label,
+      res3,
+      cls
+    };
+    if (focus) {
+      const offs = {};
+      const atoms = atomLocal[rid] || {};
+      for (const [idx, [dx, dy, el, name]] of Object.entries(atoms)) {
+        offs[idx] = {
+          dx: dx * cfg.atom_scale * scale,
+          dy: dy * cfg.atom_scale * scale,
+          el,
+          name
+        };
+      }
+      entry.atoms = offs;
+      entry.bonds = (bondsByRes[rid] || []);
+    }
+    resData[rid] = entry;
+  }
+
+  const screenXs = Object.values(resData).map(r => r.x);
+  const screenYs = Object.values(resData).map(r => r.y);
+  const cx = screenXs.length ? screenXs.reduce((a,b)=>a+b,0)/screenXs.length : cfg.width/2;
+  const cy = screenYs.length ? screenYs.reduce((a,b)=>a+b,0)/screenYs.length : cfg.height/2;
+  for (const r of Object.values(resData)) {
+    r.x = cx + (r.x - cx) * cfg.x_expand;
+    r.y = cy + (r.y - cy) * cfg.y_expand;
+  }
+
+  const HB_INNER_FACTOR = 0.7;
+  const OTHER_OUTER_FACTOR = 1.08;
+  const SHELL_GAP_PX = 25.0;
+  for (const r of Object.values(resData)) {
+    const side = r.y < boundaryY ? -1 : 1;
+    const dist = Math.abs(r.y - boundaryY);
+    const newDist = r.focus ? Math.max(8.0, dist * HB_INNER_FACTOR) : (dist * OTHER_OUTER_FACTOR) + SHELL_GAP_PX;
+    r.y = boundaryY + side * newDist;
+  }
+
+  const edges = [];
+  for (const [key, count] of contactPairs.entries()) {
+    const [u, v] = key.split("\u0000");
+    edges.push({ type: "contact", u, v, count });
+  }
+  for (const [a, b, dist] of atomHbonds) {
+    const ra = atomByIdx.get(a).res;
+    const rb = atomByIdx.get(b).res;
+    edges.push({ type: "hbond", ra, rb, a: String(a), b: String(b), dist });
+  }
+  for (const [a, b] of atomDisulphides) {
+    const ra = atomByIdx.get(a).res;
+    const rb = atomByIdx.get(b).res;
+    edges.push({ type: "disulphide", ra, rb, a: String(a), b: String(b) });
+  }
+
+  return { boundaryY, resData, edges };
+}
+
+function buildSvgContent(data, cfg = DEFAULTS) {
+  const parts = [];
+  const bx1 = -cfg.boundary_extend_px;
+  const bx2 = cfg.width + cfg.boundary_extend_px;
+  const boundaryY = data.boundaryY;
+  parts.push(`<line id="boundary" x1="${bx1.toFixed(2)}" y1="${boundaryY.toFixed(2)}" x2="${bx2.toFixed(2)}" y2="${boundaryY.toFixed(2)}" stroke="#222" stroke-dasharray="7,6" stroke-width="1.5" opacity="0.45"/>`);
+  parts.push(`<text id="chainA_label" x="-200" y="${(boundaryY - cfg.chain_label_offset_px).toFixed(2)}" font-size="18" font-weight="900" fill="#333" text-anchor="middle">Chain A</text>`);
+  parts.push(`<text id="chainB_label" x="-200" y="${(boundaryY + cfg.chain_label_offset_px + 18).toFixed(2)}" font-size="18" font-weight="900" fill="#333" text-anchor="middle">Chain B</text>`);
+
+  for (const e of data.edges) {
+    if (e.type !== "contact") continue;
+    const eid = `c_${slug(e.u)}__${slug(e.v)}`;
+    parts.push(`<line class="edge contact" id="${eid}" x1="0" y1="0" x2="0" y2="0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.55"/>`);
+  }
+  for (const e of data.edges) {
+    if (e.type === "hbond") {
+      const eid = `h_${slug(e.ra)}_${e.a}__${slug(e.rb)}_${e.b}`;
+      parts.push(`<line class="edge hbond" id="${eid}" x1="0" y1="0" x2="0" y2="0" stroke="#1b8e5a" stroke-width="2.4" stroke-dasharray="6,4" opacity="0.95"/>`);
+      parts.push(`<text class="edgeLabel" id="${eid}_t" x="0" y="0" font-size="14" fill="#1b8e5a" text-anchor="middle" dominant-baseline="central"></text>`);
+    } else if (e.type === "disulphide") {
+      const eid = `d_${slug(e.ra)}_${e.a}__${slug(e.rb)}_${e.b}`;
+      parts.push(`<line class="edge disulphide" id="${eid}" x1="0" y1="0" x2="0" y2="0" stroke="${DISULPHIDE_COLOR}" stroke-width="2.6" stroke-dasharray="6,4" opacity="0.98"/>`);
+    }
+  }
+
+  for (const [rid, r] of Object.entries(data.resData)) {
+    const gid = `res_${slug(rid)}`;
+    const focus = !!r.focus;
+    const label = r.label;
+    const cls = r.cls;
+    const res3 = r.res3;
+    const [fill, stroke] = classColors(cls);
+    const x = r.x;
+    const y = r.y;
+    const chain = r.chain;
+    parts.push(`<g class="res ${focus ? "focus" : "simple"}" id="${gid}" data-res="${esc(rid)}" data-chain="${esc(chain)}" data-cls="${esc(cls)}" data-res3="${esc(res3)}" transform="translate(${x.toFixed(2)},${y.toFixed(2)})">`);
+    if (focus) {
+      parts.push(`<g class="atomBlock" id="atomblock_${slug(rid)}">`);
+      for (const [a, b, order] of (r.bonds || [])) {
+        const da = r.atoms[a];
+        const db = r.atoms[b];
+        if (!da || !db) continue;
+        const width2 = order !== "1" ? 2.6 : 2.0;
+        parts.push(`<line class="bond" x1="${da.dx.toFixed(2)}" y1="${da.dy.toFixed(2)}" x2="${db.dx.toFixed(2)}" y2="${db.dy.toFixed(2)}" stroke="#333" stroke-width="${width2}" stroke-linecap="round" opacity="0.95"/>`);
+      }
+      for (const [idx, ainfo] of Object.entries(r.atoms || {})) {
+        const ax = ainfo.dx;
+        const ay = ainfo.dy;
+        const el = String(ainfo.el || "").toUpperCase();
+        const name = String(ainfo.name || "").toUpperCase();
+        const base = atomColor(el);
+        const col = overrideAtomColor(res3, name, base);
+        parts.push(`<circle class="atom" data-atom="${esc(idx)}" data-el="${esc(el)}" data-name="${esc(name)}" cx="${ax.toFixed(2)}" cy="${ay.toFixed(2)}" r="5.3" fill="${col}" stroke="#fff" stroke-width="1.3"/>`);
+        const txt = cfg.atom_label_mode === "atomname" ? name : el;
+        if (cfg.show_atom_labels_for_all || ["O","N","S","P"].includes(el)) {
+          const t2 = txt.length > 4 ? txt.slice(0,4) : txt;
+          parts.push(`<text class="atomLabel" x="${(ax + 8).toFixed(2)}" y="${(ay - 6).toFixed(2)}" font-size="11" fill="${col}">${esc(t2)}</text>`);
+        }
+      }
+      parts.push(`<circle class="center" cx="0" cy="0" r="7.0" fill="${fill}" opacity="0.22"/>`);
+      parts.push(`</g>`);
+      parts.push(`<text class="resLabel" x="0" y="-40" font-size="18" font-weight="900" fill="${stroke}" text-anchor="middle">${esc(label)}</text>`);
+    } else {
+      parts.push(`<circle class="node" cx="0" cy="0" r="${cfg.simple_r.toFixed(1)}" fill="${fill}" fill-opacity="0.22" stroke="${stroke}" stroke-width="2"/>`);
+      parts.push(`<text class="nodeLabel" x="0" y="0" font-size="12" fill="${stroke}" text-anchor="middle" dominant-baseline="central">${esc(label)}</text>`);
+    }
+    parts.push(`</g>`);
+  }
+  return parts.join("\n");
+}
+
+function generateViewerHtml(data) {
+  return VIEWER_TEMPLATE
+    .replace("__BOUNDARY_Y__", data.boundaryY.toFixed(3))
+    .replace("__RES_JSON__", JSON.stringify(data.resData))
+    .replace("__EDGES_JSON__", JSON.stringify(data.edges))
+    .replace("__SVG_CONTENT__", buildSvgContent(data));
+}
+
+
+function settleFrameView(frame) {
+  if (!frame) return;
+  const run = () => {
+    try {
+      const doc = frame.contentDocument;
+      const win = frame.contentWindow;
+      if (!doc || !win) return;
+
+      const btn = doc.getElementById('btnSaveHtml');
+      if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          try { if (typeof win.syncViewportSize === 'function') win.syncViewportSize(); } catch (e) {}
+          try { if (typeof win.fitViewToResidues === 'function') win.fitViewToResidues(); } catch (e) {}
+          try { if (typeof win.applyView === 'function') win.applyView(); } catch (e) {}
+          try { if (typeof win.updateAllEdges === 'function') win.updateAllEdges(); } catch (e) {}
+        });
+      });
+    } catch (e) {}
+  };
+  frame.addEventListener('load', run, { once: true });
+}
+
+function detectViewerHtmlKind(html) {
+  if (/name=["']2dppiviewer-origin["']\s+content=["']web-app["']/i.test(html)) return 'web-app';
+  if (/name=["']2dppiviewer-origin["']\s+content=["']web-viewer["']/i.test(html)) return 'web-viewer';
+  if (/id=["']btnTheme["']/i.test(html) && /id=["']btnAA["']/i.test(html) && /localStorage\s*\./.test(html)) return 'python-viewer';
+  if (/id=["']btnTheme["']/i.test(html) && /id=["']btnAA["']/i.test(html)) return 'viewer-html';
+  return 'html';
+}
+
+function patchPythonViewerHtml(html) {
+  if (detectViewerHtmlKind(html) !== 'python-viewer') return html;
+
+  const meta = '<meta name="2dppiviewer-origin" content="python-viewer"/>';
+  const shim = [
+    '<script>',
+    '(function(){',
+    '  function createMemoryStorage(){',
+    '    const store = Object.create(null);',
+    '    return {',
+    '      getItem(key){ return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null; },',
+    '      setItem(key, value){ store[key] = String(value); },',
+    '      removeItem(key){ delete store[key]; },',
+    '      clear(){ for (const key in store) delete store[key]; }',
+    '    };',
+    '  }',
+    '  try {',
+    '    const probe = "__2dppiviewer_probe__";',
+    '    window.localStorage.setItem(probe, probe);',
+    '    window.localStorage.removeItem(probe);',
+    '  } catch (e) {',
+    '    const fallback = createMemoryStorage();',
+    '    try { Object.defineProperty(window, "localStorage", { configurable: true, value: fallback }); } catch (err) {',
+    '      try { window.localStorage = fallback; } catch (err2) {}',
+    '    }',
+    '  }',
+    '})();',
+    '<\/script>'
+  ].join('');
+
+  if (/<head[^>]*>/i.test(html)) {
+    return html.replace(/<head[^>]*>/i, function(match){ return match + meta + shim; });
+  }
+  return meta + shim + html;
+}
+
+function showFrame(html, baseName, options) {
+  const opts = Object.assign({ postProcess: true, useSrcdoc: false }, options || {});
+  const frameWrap = document.getElementById("frameWrap");
+  const dropHint = document.getElementById("dropHint");
+  const frame = document.getElementById("iframe");
+
+  frameWrap.classList.remove("hidden");
+  dropHint.classList.add("hidden");
+
+  try { frame.removeAttribute('srcdoc'); } catch (e) {}
+  try { frame.src = 'about:blank'; } catch (e) {}
+  if (currentBlobUrl) {
+    try { URL.revokeObjectURL(currentBlobUrl); } catch (e) {}
+    currentBlobUrl = null;
+  }
+
+  if (opts.postProcess) settleFrameView(frame);
+
+  if (opts.useSrcdoc) {
+    frame.srcdoc = html;
+  } else {
+    currentBlobUrl = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    frame.src = currentBlobUrl;
+  }
+
+  frame.dataset.baseName = baseName || "2DPPIViewer";
+  currentViewerHtml = html;
+}
+
+async function handleFile(file) {
+  if (!file) return;
+  const name = file.name.replace(/\.(drw|html)$/i, "") || "2DPPIViewer";
+
+  if (/\.html?$/i.test(file.name)) {
+    const rawHtml = await file.text();
+    const kind = detectViewerHtmlKind(rawHtml);
+    const html = kind === 'python-viewer' ? patchPythonViewerHtml(rawHtml) : rawHtml;
+    showFrame(html, name, { postProcess: false, useSrcdoc: true });
+    setStatus("Loaded HTML (" + kind + "): " + file.name);
+    return;
+  }
+
+  setStatus("Parsing " + file.name + " ...");
+  const text = await file.text();
+  const parsed = parseDrwText(text);
+  if (!parsed.residues.length) {
+    throw new Error("No residues were parsed from this .drw file");
+  }
+  const data = computeViewerData(parsed, DEFAULTS);
+  const html = generateViewerHtml(data);
+  showFrame(html, name, { postProcess: true, useSrcdoc: false });
+  setStatus("Loaded: " + file.name);
+}
+
+function saveCurrentHtml() {
+  const frame = document.getElementById("iframe");
+  let html = currentViewerHtml;
+  try {
+    const win = frame.contentWindow;
+    if (win && typeof win.makeSnapshotHtml === "function") {
+      html = win.makeSnapshotHtml();
+    }
+  } catch (e) {}
+  if (!html) {
+    setStatus("Nothing to save");
+    return;
+  }
+  const base = frame.dataset.baseName || "2DPPIViewer";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+  a.download = base + ".html";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function exportCurrentSvg() {
+  const frame = document.getElementById("iframe");
+  try {
+    const win = frame.contentWindow;
+    if (win && typeof win.downloadSvg === "function") {
+      win.downloadSvg((frame.dataset.baseName || "2DPPIViewer") + ".svg");
+      return;
+    }
+    if (win && win.document) {
+      const btn = win.document.getElementById("btnExport");
+      if (btn) {
+        btn.click();
+        return;
+      }
+    }
+  } catch (e) {}
+  setStatus("Open a viewer first");
+}
+
+function wireDrop() {
+  const root = document.body;
+  ["dragenter", "dragover"].forEach(type => {
+    root.addEventListener(type, e => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  });
+  ["dragleave", "drop"].forEach(type => {
+    root.addEventListener(type, e => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  });
+  root.addEventListener("drop", async e => {
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!file) return;
+    try {
+      await handleFile(file);
+    } catch (err) {
+      console.error(err);
+      setStatus("Error: " + (err && err.message ? err.message : String(err)));
+    }
+  });
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  const fileInput = document.getElementById("fileOpen");
+  const open = () => fileInput.click();
+  document.getElementById("btnOpen").addEventListener("click", open);
+  document.getElementById("btnOpen2").addEventListener("click", open);
+  document.getElementById("btnSave").addEventListener("click", saveCurrentHtml);
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files && fileInput.files[0];
+    fileInput.value = "";
+    if (!file) return;
+    try {
+      await handleFile(file);
+    } catch (err) {
+      console.error(err);
+      setStatus("Error: " + (err && err.message ? err.message : String(err)));
+    }
+  });
+  wireDrop();
+  window.addEventListener("resize", () => {
+    const frame = document.getElementById("iframe");
+    const wrap = document.getElementById("frameWrap");
+    if (!frame || !wrap || wrap.classList.contains("hidden")) return;
+    try {
+      const win = frame.contentWindow;
+      if (!win) return;
+      const apply = () => {
+        try { if (typeof win.syncViewportSize === "function") win.syncViewportSize(); } catch (e) {}
+        try { if (typeof win.updateAllEdges === "function") win.updateAllEdges(); } catch (e) {}
+      };
+      if (typeof win.requestAnimationFrame === "function") {
+        win.requestAnimationFrame(() => win.requestAnimationFrame(apply));
+      } else {
+        setTimeout(apply, 30);
+      }
+    } catch (e) {}
+  });
+});
+</script>
+<div style="position: fixed; bottom:6px; right:10px; font-size:11px; color:#777; font-family:system-ui,sans-serif; opacity:0.8; pointer-events:none; z-index:9999;">
+2DPPI-Viewer • Yong Jin Choi • Kyung Hee University
+</div>
+</body>
+</html>
