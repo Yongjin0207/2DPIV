@@ -58,7 +58,7 @@ Installation
 
 Clone the repository:
 
-git clone [https://github.com/Yongjin0207/2DPIV.git](https://github.com/Yongjin0207/2DPPI-Viewer.git)
+git clone [https://github.com/Yongjin0207/2DPPI-Viewer.git](https://github.com/Yongjin0207/2DPPI-Viewer.git)
 cd 2DPIV
 
 ---
