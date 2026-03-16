@@ -179,6 +179,32 @@ Output
 
 ---
 
+**Web interface (browser viewer)**
+
+---
+
+2DPPI-Viewer also provides a browser-based interface that allows users to explore interaction diagrams without running Python.
+
+The web viewer is provided as:
+
+2DPPI-Viewer_Web.html
+
+This interface enables users to:
+
+* Open `.drw` files directly in the browser
+* Load previously generated viewer HTML files
+* Export interactive HTML visualizations
+
+To use the web viewer:
+
+1. Open `2DPPI-Viewer_Web.html` in any modern web browser.
+2. Load a `.drw` file or an existing viewer HTML file.
+3. Explore the interaction diagram interactively.
+
+No installation or server environment is required.
+
+---
+
 Dependency notice
 
 ---
